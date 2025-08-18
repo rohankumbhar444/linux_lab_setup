@@ -122,6 +122,26 @@ else
     echo "Q10 on $NODE1 : FAIL (+0)"
 fi
 
+# ---------------- Q11: Password expiry 30 days ----------------
+Q11_SCORE=0
+PASS_OK=1
+MAX_DAYS_DEF=$(ssh $NODE1 "grep -E '^PASS_MAX_DAYS' /etc/login.defs | awk '{print \$2}'")
+if [[ "$MAX_DAYS_DEF" -ne 30 ]]; then
+    PASS_OK=0
+fi
+for u in $(ssh $NODE1 "cut -f1 -d: /etc/passwd | grep -vE '^(root|sync|halt|shutdown|nfsnobody)$'"); do
+    DAYS=$(ssh $NODE1 "chage -l $u | grep 'Maximum' | awk -F: '{print \$2}' | xargs")
+    if [[ "$DAYS" -ne 30 ]]; then
+        PASS_OK=0
+    fi
+done
+if [ $PASS_OK -eq 1 ]; then
+    echo "Q11 on $NODE1 : PASS (+${MARKS[11]})"
+    TOTAL_SCORE=$((TOTAL_SCORE + MARKS[11]))
+else
+    echo "Q11 on $NODE1 : FAIL (+0)"
+fi
+
 ssh $NODE1 "grep -q 'ich' /root/lines"
 if [ $? -eq 0 ]; then
     echo "Q12 on $NODE1 : PASS (+${MARKS[12]})"
