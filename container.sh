@@ -100,5 +100,3 @@ echo "Students can download all Dockerfiles into current directory using just:"
 echo "wget http://$SERVER_IP/dockerfiles/"
 #podman login -u admin -p redhat registry.lab.example.com:5000 --tls-verify=false
 #wget -r -np -nH --cut-dirs=1 http://content.example.com/dockerfiles/
-
-~                                                  
