@@ -57,9 +57,10 @@ run_check "hostnamectl status | grep 'node1.example.com'" 1 $NODE1
 # Q2: Repo exists & working
 run_check "yum repolist | grep -E 'BaseOS|AppStream'" 2 $NODE1
 
-# Q3: httpd on 82 & /var/www/html/index.html exists
-ssh $NODE1 "ss -tlnp | grep 82 && [ -f /var/www/html/index.html ]"
-if [ $? -eq 0 ]; then
+# Q3: httpd on 82 & response check
+EXPECTED_MSG="Cheers to you for a job well done! No one can compare to your creativity and passion."
+Q3_RESPONSE=$(ssh $NODE1 "curl -s http://localhost:82")
+if [[ "$Q3_RESPONSE" == *"$EXPECTED_MSG"* ]]; then
     echo "Q3 on $NODE1 : PASS (+${MARKS[3]})"
     TOTAL_SCORE=$((TOTAL_SCORE + MARKS[3]))
 else
@@ -159,7 +160,7 @@ else
     echo "Q14 on $NODE1 : FAIL (+0)"
 fi
 
-# Q15-Q16 Podman checks (same as original)
+# Q15-Q16 Podman checks
 run_check "podman images | grep process_files" 15 $NODE1
 run_check "podman ps -a | grep ascii2pdf" 16 $NODE1
 
@@ -168,7 +169,7 @@ echo "========= Node2 Checks (Q17–Q22) ========="
 echo "Q17 on $NODE2 : MANUAL CHECK (root password reset)"
 run_check "yum repolist | grep -E 'BaseOS|AppStream'" 18 $NODE2
 
-# Q19-Q22 same as original
+# Q19-Q21 LVM/Swap/WShare checks
 ssh $NODE2 "lvs myvg/mylv &>/dev/null"
 if [ $? -eq 0 ]; then
     SIZE=$(ssh $NODE2 "lvs --noheadings -o LV_SIZE --units m --nosuffix myvg/mylv | xargs | cut -d. -f1")
@@ -208,6 +209,7 @@ else
     echo "Q21 on $NODE2 : FAIL (+0)"
 fi
 
+# Q22: tuned profile virtual-guest
 Q22_SCORE=0
 PROFILE=$(ssh $NODE2 "tuned-adm active | grep 'Current active profile:' | awk -F': ' '{print \$2}'")
 if [[ "$PROFILE" == "virtual-guest" ]]; then
@@ -220,5 +222,8 @@ TOTAL_SCORE=$((TOTAL_SCORE + Q22_SCORE))
 
 echo "===================================="
 echo "FINAL SCORE: $TOTAL_SCORE / $TOTAL_MARKS"
-if [
-
+if [ $TOTAL_SCORE -ge $PASS_MARKS ]; then
+    echo "RESULT: PASS ✅"
+else
+    echo "RESULT: FAIL ❌"
+fi
