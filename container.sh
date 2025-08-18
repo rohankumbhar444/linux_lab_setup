@@ -1,9 +1,10 @@
 #!/bin/bash
 # ==========================================================
-# Local Private Registry + Dockerfiles HTTP Serve Setup Script
+# Local Private Registry + Dockerfiles HTTP Serve Setup Script + Remote Athena user setup
 # Registry Name : registry.lab.example.com
 # User          : admin
 # Password      : redhat
+# Remote Node   : node2
 # Author        : Rohan
 # ==========================================================
 
@@ -14,10 +15,31 @@ REGISTRY_DATA_DIR="/opt/registry/data"
 AUTH_DIR="/opt/registry/auth"
 DOCKERFILES_DIR="/opt/registry/dockerfiles"
 
+# Remote node where athena user will be created
+REMOTE_NODE="node2"
+ATHENA_USER="athena"
+ATHENA_PASS="redhat"
+
 # 👉 DHCP ने मिळालेला primary IP घ्या
 SERVER_IP=$(hostname -I | awk '{print $1}')
 
-echo "=== Step 1: Install podman, httpd-tools and Apache ==="
+echo "=== Step 0: Create Athena user on remote node ($REMOTE_NODE) with rootless Podman setup ==="
+ssh root@$REMOTE_NODE bash <<EOF
+id $ATHENA_USER &>/dev/null
+if [ \$? -ne 0 ]; then
+    useradd $ATHENA_USER
+    echo "$ATHENA_USER:$ATHENA_PASS" | chpasswd
+    echo "✅ User $ATHENA_USER created with password $ATHENA_PASS on $REMOTE_NODE"
+else
+    echo "ℹ User $ATHENA_USER already exists on $REMOTE_NODE"
+fi
+
+# Enable rootless Podman for Athena
+loginctl enable-linger $ATHENA_USER
+echo "✅ Rootless Podman enabled for $ATHENA_USER on $REMOTE_NODE"
+EOF
+
+echo "=== Step 1: Install podman, httpd-tools and Apache on local server ==="
 dnf install -y podman httpd-tools httpd
 
 echo "=== Step 2: Create required directories ==="
@@ -52,16 +74,16 @@ firewall-cmd --reload
 echo "=== Step 7: Configure registries.conf to allow insecure registry ==="
 REG_CONF="/etc/containers/registries.conf"
 if ! grep -q "$REGISTRY_NAME:$REGISTRY_PORT" $REG_CONF; then
-    cat <<EOF >> $REG_CONF
+    cat <<EOC >> $REG_CONF
 
 [[registry]]
 location = "$REGISTRY_NAME:$REGISTRY_PORT"
 insecure = true
 blocked = false
-EOF
+EOC
 fi
 
-echo "=== Step 8: Test login from server ==="
+echo "=== Step 8: Test login from local server ==="
 podman login -u admin -p redhat $REGISTRY_NAME:$REGISTRY_PORT --tls-verify=false
 
 echo "=== Step 9: Copy RHCSA-Container files into $DOCKERFILES_DIR ==="
@@ -79,24 +101,22 @@ cp -r $DOCKERFILES_DIR/* $WEBROOT/
 chown -R apache:apache $WEBROOT
 chmod -R 755 $WEBROOT
 
-# Enable simple directory listing
 APACHE_CONF="/etc/httpd/conf.d/dockerfiles.conf"
-cat <<EOF > $APACHE_CONF
+cat <<EOC > $APACHE_CONF
 Alias /dockerfiles $WEBROOT
 <Directory $WEBROOT>
     Options +Indexes +FollowSymLinks
     AllowOverride None
     Require all granted
 </Directory>
-EOF
+EOC
 
 systemctl enable --now httpd
 
 echo "=== DONE ==="
 echo "Registry running at: http://$REGISTRY_NAME:$REGISTRY_PORT"
 echo "Dockerfiles available via HTTP at: http://$SERVER_IP/dockerfiles/"
-echo "Students can now login with: podman login -u admin -p redhat $REGISTRY_NAME:$REGISTRY_PORT --tls-verify=false"
+echo "Athena user rootless enabled on remote node ($REMOTE_NODE)."
+echo "Students can login as $ATHENA_USER with password $ATHENA_PASS"
 echo "Students can download all Dockerfiles into current directory using just:"
 echo "wget http://$SERVER_IP/dockerfiles/"
-#podman login -u admin -p redhat registry.lab.example.com:5000 --tls-verify=false
-#wget -r -np -nH --cut-dirs=1 http://content.example.com/dockerfiles/
