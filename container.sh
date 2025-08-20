@@ -16,7 +16,7 @@ AUTH_DIR="/opt/registry/auth"
 DOCKERFILES_DIR="/opt/registry/dockerfiles"
 
 # Remote node where athena user will be created
-REMOTE_NODE="node2"
+REMOTE_NODE="node1"
 ATHENA_USER="athena"
 ATHENA_PASS="redhat"
 
